@@ -4,23 +4,50 @@ from io import BytesIO
 from datetime import date
 import numpy as np
 
-# Script A components
+# Data Clean (Script A) components
 def data_cleanse(df):
-    # Your data cleansing function
-    pass
+    cols_to_check = [0, 1, 2, 4, 5, 6, 7, 8, 9]
+    for col in cols_to_check:
+        for i in range(1, len(df)):
+            if pd.isna(df.iat[i, col]):
+                df.iat[i, col] = df.iat[i-1, col]
+    return df
 
 def run_script_a():
-    # Your script A implementation
-    pass
+    st.title("Valid8ME Data Cleanse")
+    
+    uploaded_file = st.file_uploader("Upload Valid8Me Output for Cleaning", type=['xlsx'])
+    
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file)
+        
+        st.write("Before cleaning:")
+        st.write(df.head(20))
+        
+        if st.button("Clean Data"):
+            cleaned_df = data_cleanse(df)
+            
+            st.write("After cleaning:")
+            st.write(cleaned_df.head(20))
+            
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                cleaned_df.to_excel(writer, index=False, sheet_name='Sheet1')
+            output.seek(0)
+            
+            st.download_button(label="Download Cleaned Excel", data=output, file_name="Valid8MeOutput-clean.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            return cleaned_df
+    return None
 
-# Script B components
+# Data Merge (Script B) components
 def fill_missing_values(df):
-    # Your function to fill missing values
-    pass
+    # Example implementation for filling missing values
+    df.fillna(method='ffill', inplace=True)
+    return df
 
 def add_data_from_masterfile(all_df, master_df):
-    # Your function to add data from the master file
-    pass
+    # Example implementation for adding data from master file
+    return pd.merge(all_df, master_df, on='Form_instance_ID', how='left')
 
 def run_script_b():
     st.title("Valid8ME Data Merge")
@@ -62,21 +89,18 @@ def run_script_b():
                 st.write("Columns after merge:")
                 st.write(merged_df.columns.tolist())
 
-                fill_missing_values(merged_df)
+                merged_df = fill_missing_values(merged_df)
 
                 # Other operations...
-                # Here you can add other operations if needed
-                # ...
-
                 st.write("Columns after additional processing:")
                 st.write(merged_df.columns.tolist())
 
-                merged_file_path = "merged_file.xlsx"
-                merged_df.to_excel(merged_file_path, index=False)
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    merged_df.to_excel(writer, index=False, sheet_name='Sheet1')
+                output.seek(0)
 
-                csv_data = merged_df.to_csv(index=False).encode('utf-8')
-                st.download_button(label="Download CSV", data=csv_data, file_name="Valid8MeAggregate.csv", mime="text/csv")
-
+                st.download_button(label="Download Merged Excel", data=output, file_name="Valid8MeAggregate.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 st.success("Merged Excel file saved successfully.")
             except Exception as e:
                 st.warning(f"Merge failed: {e}")
@@ -89,12 +113,9 @@ def main():
     process = st.sidebar.selectbox("Select Process", ["Clean Data", "Merge Data"])
 
     if process == "Clean Data":
-        cleaned_df = run_script_a()
-        if cleaned_df is not None:
-            st.write("Data cleaned and saved successfully. Proceed to the 'Merge Data' process.")
+        run_script_a()
     elif process == "Merge Data":
         run_script_b()
 
 if __name__ == "__main__":
     main()
-
