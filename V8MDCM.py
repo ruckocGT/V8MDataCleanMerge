@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from datetime import date
-import numpy as np
+import time
 
 # Data Clean (Script A) components
 def data_cleanse(df):
@@ -45,10 +44,6 @@ def fill_missing_values(df):
     df.fillna(method='ffill', inplace=True)
     return df
 
-def add_data_from_masterfile(all_df, master_df):
-    # Example implementation for adding data from master file
-    return pd.merge(all_df, master_df, on='Form_instance_ID', how='left')
-
 def run_script_b():
     st.title("Valid8ME Data Merge")
 
@@ -61,38 +56,56 @@ def run_script_b():
     if st.button("Merge Data Process"):
         if file1 is not None and cleaned_file is not None:
             try:
-                df1 = pd.read_excel(file1, engine='openpyxl')
-                df2 = pd.read_excel(cleaned_file, engine='openpyxl')
+                master_df = pd.read_excel(file1, engine='openpyxl')
+                cleaned_df = pd.read_excel(cleaned_file, engine='openpyxl')
 
-                df1.columns = df1.columns.str.strip()
-                df2.columns = df2.columns.str.strip()
+                # Remove columns with unnamed headers
+                cleaned_df = cleaned_df.loc[:, ~cleaned_df.columns.str.contains('^Unnamed')]
+
+                master_df.columns = master_df.columns.str.strip()
+                cleaned_df.columns = cleaned_df.columns.str.strip()
 
                 st.write("Columns in the master dataframe:")
-                st.write(df1.columns.tolist())
+                st.write(master_df.columns.tolist())
                 st.write("Columns in the cleaned dataframe:")
-                st.write(df2.columns.tolist())
+                st.write(cleaned_df.columns.tolist())
 
-                df1['Form_instance_ID'] = df1['Form_instance_ID'].astype(str)
-                df2['Form_instance_ID'] = df2['Form_instance_ID'].astype(str)
+                master_df['Form_instance_ID'] = master_df['Form_instance_ID'].astype(str).str.strip()
+                cleaned_df['Form_instance_ID'] = cleaned_df['Form_instance_ID'].astype(str).str.strip()
 
+                # Ensure required columns exist
                 required_columns = ['Form_instance_ID', 'Page name']
                 for col in required_columns:
-                    if col not in df1.columns:
+                    if col not in master_df.columns:
                         st.warning(f"Column '{col}' is missing in the master dataframe.")
                         return
-                    if col not in df2.columns:
+                    if col not in cleaned_df.columns:
                         st.warning(f"Column '{col}' is missing in the cleaned dataframe.")
                         return
 
-                merged_df = pd.merge(df1, df2, on=['Form_instance_ID', 'Page name'], how='outer')
+                merged_df = master_df.copy()
+                
+                progress_bar = st.progress(0)
+                start_time = time.time()
+                total_rows = len(cleaned_df)
+
+                # Merge and update data from columns L onwards
+                for index, row in cleaned_df.iterrows():
+                    form_id = row['Form_instance_ID']
+                    page_name = row['Page name']
+                    master_row = merged_df[(merged_df['Form_instance_ID'] == form_id) & (merged_df['Page name'] == page_name)]
+                    if not master_row.empty:
+                        for col in cleaned_df.columns[11:]:
+                            if row[col] != master_row.iloc[0][col]:
+                                merged_df.loc[master_row.index, col] = row[col]
+                    
+                    # Update progress bar
+                    progress_bar.progress((index + 1) / total_rows)
+                
+                elapsed_time = time.time() - start_time
+                st.write(f"Merge process completed in {elapsed_time:.2f} seconds")
 
                 st.write("Columns after merge:")
-                st.write(merged_df.columns.tolist())
-
-                merged_df = fill_missing_values(merged_df)
-
-                # Other operations...
-                st.write("Columns after additional processing:")
                 st.write(merged_df.columns.tolist())
 
                 output = BytesIO()
